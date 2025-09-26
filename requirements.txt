@@ -1,2 +1,30 @@
+# Core web app
 streamlit
-openai
+python-dotenv
+
+# Data & computation
+pandas
+numpy
+scikit-learn
+scipy
+
+# Visualization
+plotly
+
+# PDF/report generation
+reportlab
+
+# LLM integration
+google-generativeai
+
+# Utilities
+pydantic
+requests
+
+# Optional: caching & performance
+cachetools
+
+# Dev tools (optional)
+black
+isort
+flake8
