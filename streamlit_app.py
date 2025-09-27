@@ -186,6 +186,26 @@ if "results" not in st.session_state:
 if "ai_summary" not in st.session_state:
     st.session_state["ai_summary"] = None
 
+# Disclaimer gate (top-level)
+if "disclaimer_ok" not in st.session_state:
+    st.session_state["disclaimer_ok"] = False
+
+if not st.session_state["disclaimer_ok"]:
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.markdown("""
+**Aviso Importante**
+
+Essa plataforma foi desenvolvida para o Projeto de Iniciação Tecnológica "Desenvolvimento de Plataforma Digital para Estratificação de Risco
+Perioperatório como Ferramenta Auxiliar à Avaliação Pré-Anestésica". Ela foi submetida ao Comitê de Ética em Pesquisa do Hospital Universitário Onofre Lopes e está inscrita sob o CAAE XXXXXXXXXXX. O pesquisador responsável é Luis Felipe Barbosa da Silva, disponível no contato XXXXXXX. O projeto está orientado pelo Prof. Dr. Wallace Andrino da Silva.
+
+Clique no botão abaixo para confirmar que leu e entendeu este aviso.
+""")
+    if st.button("Entendi", type="primary"):
+        st.session_state["disclaimer_ok"] = True
+        st.experimental_rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
+
 if st.session_state.get("disclaimer_ok", False):
     # --------- Header ---------
     col_logo, col_title = st.columns([1, 6])
@@ -219,28 +239,6 @@ if st.session_state.get("disclaimer_ok", False):
 
         st.markdown("---")
         st.caption("Relatórios serão salvos em 'reports/'. A IA usa a chave do .env.")
-
-    # --------- Disclaimer (Gate) ---------
-    if "disclaimer_ok" not in st.session_state:
-        st.session_state["disclaimer_ok"] = False
-
-    if not st.session_state["disclaimer_ok"]:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("""
-    **Aviso Importante**
-
-    Essa plataforma foi desenvolvida para o Projeto de Iniciação Tecnológica "Desenvolvimento de Plataforma Digital para Estratificação de Risco
-    Perioperatório como Ferramenta Auxiliar à Avaliação Pré-Anestésica". Ela foi submetida ao Comitê de Ética em Pesquisa do Hospital Universitário Onofre Lopes e está inscrita sob o CAAE XXXXXXXXXXX. O pesquisador responsável é Luis Felipe Barbosa da Silva, disponível no contato XXXXXXX. O projeto está orientado pelo Prof. Dr. Wallace Andrino da Silva.
-
-    Clique no botão abaixo para confirmar que leu e entendeu este aviso.
-    """)
-        if st.button("Entendi", type="primary"):
-            st.session_state["disclaimer_ok"] = True
-            st.experimental_rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        # Render normal app below
-        pass
 
     # --------- Helpers ---------
     def _show_patient_form() -> None:
