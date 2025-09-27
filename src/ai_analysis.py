@@ -39,6 +39,8 @@ def _build_prompt_general(payload: Dict[str, Any]) -> str:
 Você é um anestesiologista especialista em avaliação pré-operatória.
 Analise este paciente baseando-se nos escores validados calculados e forneça uma avaliação de risco perioperatório estruturada.
 
+INSTRUÇÕES CRÍTICAS: NÃO escreva preâmbulos, saudações ou confirmações (ex.: "Com certeza..."). Responda APENAS com um JSON válido exatamente no formato solicitado, iniciando pelo caractere { e terminando em }.
+
 DADOS DO PACIENTE: {_json(patient)}
 
 ESCORES CALCULADOS:
@@ -79,6 +81,8 @@ def _build_prompt_medications(payload: Dict[str, Any]) -> str:
 	prompt = f"""
 Baseado nos escores de risco calculados e dados clínicos, analise as medicações em uso seguindo guidelines baseadas em evidência.
 
+INSTRUÇÕES CRÍTICAS: NÃO escreva preâmbulos, saudações ou confirmações. Responda APENAS com um JSON válido exatamente no formato solicitado, iniciando em { e terminando em }.
+
 ESCORES DE RISCO:
 RCRI: {_json(scores.get('rcri'))}
 ARISCAT: {_json(scores.get('ariscat'))}
@@ -104,7 +108,8 @@ Referencie guidelines (ACC/AHA, ESC/ESA, ASA) quando aplicável.
 def _build_prompt_scores_interpretation(payload: Dict[str, Any]) -> str:
 	scores = payload.get("scores", {})
 	prompt = f"""
-Interprete os resultados dos escores de forma integrada e clinicamente relevante. Responda em JSON ESTRITO:
+Interprete os resultados dos escores de forma integrada e clinicamente relevante. Responda em JSON ESTRITO.
+INSTRUÇÕES CRÍTICAS: Não escreva preâmbulos/saudações/"com certeza"; responda apenas com um JSON válido (inicie em { e termine em ).
 Resultados:
 ASA: {_json(scores.get('asa'))}
 NSQIP: {_json(scores.get('nsqip'))}
