@@ -36,7 +36,7 @@ def _build_prompt_general(payload: Dict[str, Any]) -> str:
 	predeliric = scores.get("pre_deliric")
 
 	prompt = f"""
-Você é um anestesiologista especialista em avaliação pré-operatória.
+Você é um anestesiologista especialista em avaliação pré-operatória. NÃO escreva preâmbulos, saudações ou confirmações (ex.: "Com certeza...")
 Analise este paciente baseando-se nos escores validados calculados e forneça uma avaliação de risco perioperatório estruturada.
 
 INSTRUÇÕES CRÍTICAS: NÃO escreva preâmbulos, saudações ou confirmações (ex.: "Com certeza..."). Responda APENAS com um JSON válido exatamente no formato solicitado, iniciando pelo caractere { e terminando em }.
@@ -67,7 +67,7 @@ Forneça resposta em JSON ESTRITO no formato abaixo, baseada EXCLUSIVAMENTE nos 
   "medicacoes": {{"suspender": ["..."], "manter": ["..."], "ajustar": ["..."]}},
   "monitorizacao": ["..."]
 }}
-Use linguagem técnica adequada para anestesiologistas e cite guidelines (ACC/AHA, ESC/ESA, ASA, ERAS, ACS-NSQIP) quando relevante.
+NÃO escreva preâmbulos, saudações ou confirmações (ex.: "Com certeza...") Use linguagem técnica adequada para anestesiologistas e cite guidelines (ACC/AHA, ESC/ESA, ASA, ERAS, ACS-NSQIP) quando relevante.
 """
 	return prompt
 
@@ -79,7 +79,7 @@ def _build_prompt_medications(payload: Dict[str, Any]) -> str:
 	meds = patient.get("medications", {})
 
 	prompt = f"""
-Baseado nos escores de risco calculados e dados clínicos, analise as medicações em uso seguindo guidelines baseadas em evidência.
+Baseado nos escores de risco calculados e dados clínicos, analise as medicações em uso seguindo guidelines baseadas em evidência. NÃO escreva preâmbulos, saudações ou confirmações (ex.: "Com certeza...")
 
 INSTRUÇÕES CRÍTICAS: NÃO escreva preâmbulos, saudações ou confirmações. Responda APENAS com um JSON válido exatamente no formato solicitado, iniciando em { e terminando em }.
 
