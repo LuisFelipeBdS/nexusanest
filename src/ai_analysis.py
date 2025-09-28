@@ -146,73 +146,101 @@ class AIAnalysisCache:
 _cache = AIAnalysisCache()
 
 
+def _normalize_top_keys(data: Dict[str, Any]) -> Dict[str, Any]:
+	key_aliases = {
+		"resumo": "resumo_executivo",
+		"executive_summary": "resumo_executivo",
+		"resumo_executivo": "resumo_executivo",
+		"por_sistemas": "por_sistemas",
+		"analise_por_sistemas": "por_sistemas",
+		"analise_sistemas": "por_sistemas",
+		"estratificacao_geral": "estratificacao_geral",
+		"estratificação_geral": "estratificacao_geral",
+		"overall_risk": "estratificacao_geral",
+		"recomendacoes": "recomendacoes",
+		"recomendações": "recomendacoes",
+		"recommendations": "recomendacoes",
+		"medicacoes": "medicacoes",
+		"medicações": "medicacoes",
+		"medications": "medicacoes",
+		"monitorizacao": "monitorizacao",
+		"monitorização": "monitorizacao",
+		"monitoring": "monitorizacao",
+	}
+	out: Dict[str, Any] = {}
+	for k, v in data.items():
+		kk = key_aliases.get(str(k), str(k))
+		out[kk] = v
+	# defaults
+	out.setdefault("resumo_executivo", "")
+	out.setdefault("por_sistemas", {})
+	out.setdefault("estratificacao_geral", "")
+	out.setdefault("recomendacoes", [])
+	meds = out.get("medicacoes") or {}
+	if not isinstance(meds, dict):
+		meds = {}
+	# normalize med keys
+	m_alias = {
+		"suspender": "suspender",
+		"suspensão": "suspender",
+		"hold": "suspender",
+		"manter": "manter",
+		"continuar": "manter",
+		"continue": "manter",
+		"ajustar": "ajustar",
+		"adjust": "ajustar",
+	}
+	m_out: Dict[str, Any] = {"suspender": [], "manter": [], "ajustar": []}
+	for k, v in meds.items() if isinstance(meds, dict) else []:
+		kk = m_alias.get(str(k), str(k))
+		m_out.setdefault(kk, [])
+		if isinstance(v, list):
+			m_out[kk] = v
+		elif v:
+			m_out[kk] = [str(v)]
+	out["medicacoes"] = m_out
+	out.setdefault("monitorizacao", [])
+	return out
+
+
 def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, defaults: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 	text = (text or "").strip()
 	if expected_keys is None:
 		expected_keys = ["resumo_executivo", "por_sistemas", "estratificacao_geral", "recomendacoes", "medicacoes", "monitorizacao"]
-	# Remove cercas de código ``` ou ```json
+	# Remove cercas ```
 	if text.startswith("```"):
 		lines = text.splitlines()
-		# remove primeira e última linha se cercadas
 		if len(lines) >= 3 and lines[0].startswith("```") and lines[-1].strip().startswith("```"):
 			text = "\n".join(lines[1:-1]).strip()
-	# Tenta carregar diretamente
-	for attempt in range(2):
+	# Primeira tentativa: JSON direto (leniente)
+	try:
+		data = json.loads(text)
+		if isinstance(data, dict):
+			return _normalize_top_keys(data)
+	except Exception:
+		pass
+	# Segunda: extrair bloco entre chaves e tentar JSON
+	l = text.find("{")
+	r = text.rfind("}")
+	if l != -1 and r != -1 and r > l:
+		frag = text[l : r + 1]
 		try:
-			data = json.loads(text)
+			data = json.loads(frag)
 			if isinstance(data, dict):
-				# garante chaves esperadas
-				for k in expected_keys:
-					data.setdefault(k, [] if k not in ("por_sistemas", "medicacoes") else ({} if k == "por_sistemas" else {"suspender": [], "manter": [], "ajustar": []}))
-				return data
+				return _normalize_top_keys(data)
 		except Exception:
 			pass
-		# segunda tentativa: extrair substring do primeiro '{' ao último '}'
-		l = text.find("{")
-		r = text.rfind("}")
-		if l != -1 and r != -1 and r > l:
-			text = text[l : r + 1]
-			continue
-		break
-	# Fallback to Python literal dict
+	# Terceira: literal_eval
 	try:
 		data = ast.literal_eval(text)
 		if isinstance(data, dict):
-			# Normalize keys to expected names
-			key_map = {
-				"resumo": "resumo_executivo",
-				"resumo_executivo": "resumo_executivo",
-				"por_sistemas": "por_sistemas",
-				"estratificacao_geral": "estratificacao_geral",
-				"recomendacoes": "recomendacoes",
-				"medicacoes": "medicacoes",
-				"monitorizacao": "monitorizacao",
-			}
-			norm: Dict[str, Any] = {}
-			for k, v in data.items():
-				kk = key_map.get(str(k), str(k))
-				norm[kk] = v
-			for k in expected_keys:
-				if k == "por_sistemas":
-					norm.setdefault(k, {})
-				elif k == "medicacoes":
-					norm.setdefault(k, {"suspender": [], "manter": [], "ajustar": []})
-				else:
-					norm.setdefault(k, [])
-			return norm
+			return _normalize_top_keys(data)
 	except Exception:
 		pass
-
+	# Fallback
 	base = defaults.copy() if defaults else {}
 	if not base:
-		base = {}
-	for k in expected_keys:
-		if k == "por_sistemas":
-			base.setdefault(k, {})
-		elif k == "medicacoes":
-			base.setdefault(k, {"manter": [], "suspender": [], "ajustar": []})
-		else:
-			base.setdefault(k, [])
+		base = {"resumo_executivo": "", "por_sistemas": {}, "estratificacao_geral": "", "recomendacoes": [], "medicacoes": {"suspender": [], "manter": [], "ajustar": []}, "monitorizacao": []}
 	base.setdefault("_raw_text", text)
 	return base
 
@@ -282,10 +310,31 @@ def analyze_medications(payload: Dict[str, Any], cfg: AppConfig) -> Tuple[Dict[s
 	defaults = {"suspender": [], "manter": [], "ajustar": [], "profilaxias": [], "bridge": []}
 	if not text:
 		_cache.set(key, {**defaults, "_raw": ""})
+		logger.warning("AI meds response empty; returning defaults")
 		return defaults, ""
-	parsed = _parse_response_text(text, expected_keys=expected, defaults=defaults)
-	_cache.set(key, {**parsed, "_raw": text})
-	return parsed, text
+	# Try to parse JSON; if not dict, wrap into expected structure
+	parsed_any = None
+	try:
+		parsed_any = json.loads(text)
+	except Exception:
+		# try literal eval
+		try:
+			parsed_any = ast.literal_eval(text)
+		except Exception:
+			parsed_any = None
+	meds = {"suspender": [], "manter": [], "ajustar": []}
+	if isinstance(parsed_any, dict):
+		# normalize keys for meds only
+		alias = {"suspender": "suspender", "hold": "suspender", "manter": "manter", "continue": "manter", "ajustar": "ajustar", "adjust": "ajustar"}
+		for k, v in parsed_any.items():
+			kk = alias.get(str(k), str(k))
+			if kk in meds:
+				if isinstance(v, list):
+					meds[kk] = v
+				elif v:
+					meds[kk] = [str(v)]
+	_cache.set(key, {**meds, "_raw": text})
+	return meds, text
 
 
 def analyze_scores_interpretation(payload: Dict[str, Any], cfg: AppConfig) -> Tuple[Dict[str, Any], str]:
