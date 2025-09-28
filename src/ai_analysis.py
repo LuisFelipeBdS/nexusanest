@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import ast
 from typing import Any, Dict, Optional, Tuple, List, Callable
 
 from .config import AppConfig, create_gemini_model, _build_generation_config
@@ -173,7 +174,35 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 			text = text[l : r + 1]
 			continue
 		break
-	# Fallback
+	# Fallback to Python literal dict
+	try:
+		data = ast.literal_eval(text)
+		if isinstance(data, dict):
+			# Normalize keys to expected names
+			key_map = {
+				"resumo": "resumo_executivo",
+				"resumo_executivo": "resumo_executivo",
+				"por_sistemas": "por_sistemas",
+				"estratificacao_geral": "estratificacao_geral",
+				"recomendacoes": "recomendacoes",
+				"medicacoes": "medicacoes",
+				"monitorizacao": "monitorizacao",
+			}
+			norm: Dict[str, Any] = {}
+			for k, v in data.items():
+				kk = key_map.get(str(k), str(k))
+				norm[kk] = v
+			for k in expected_keys:
+				if k == "por_sistemas":
+					norm.setdefault(k, {})
+				elif k == "medicacoes":
+					norm.setdefault(k, {"suspender": [], "manter": [], "ajustar": []})
+				else:
+					norm.setdefault(k, [])
+			return norm
+	except Exception:
+		pass
+
 	base = defaults.copy() if defaults else {}
 	if not base:
 		base = {}
