@@ -352,8 +352,13 @@ def analyze_general(payload: Dict[str, Any], cfg: AppConfig) -> Tuple[Dict[str, 
 	key = _hash_patient_payload(payload, namespace="general")
 	cached = _cache.get(key)
 	if cached:
+		logger.info("Retornando resultado do cache")
 		return cached, cached.get("_raw", "")
+	
+	logger.info("Gerando nova análise com IA")
 	prompt = _build_prompt_general(payload)
+	logger.info(f"Prompt gerado com {len(prompt)} caracteres")
+	
 	text = _run_gemini(prompt, cfg)
 	expected = ["resumo_executivo", "por_sistemas", "estratificacao_geral", "recomendacoes", "medicacoes", "monitorizacao"]
 	defaults = {
@@ -372,7 +377,10 @@ def analyze_general(payload: Dict[str, Any], cfg: AppConfig) -> Tuple[Dict[str, 
 		_cache.set(key, {**fallback, "_raw": ""})
 		logger.warning("AI response empty; returning fallback")
 		return fallback, ""
+	
+	logger.info(f"IA retornou resposta com {len(text)} caracteres")
 	parsed = _parse_response_text(text, expected_keys=expected, defaults=defaults)
+	logger.info(f"Resposta parseada com chaves: {list(parsed.keys())}")
 	_cache.set(key, {**parsed, "_raw": text})
 	return parsed, text
 

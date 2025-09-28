@@ -822,6 +822,24 @@ if st.session_state.get("disclaimer_ok", False):
                 st.write(f"- Payload tem dados do paciente: {bool(payload.get('patient'))}")
                 st.write(f"- Payload tem escores: {list(payload.get('scores', {}).keys())}")
                 
+                # Mostrar dados do paciente
+                patient_data = payload.get('patient', {})
+                st.write("**Dados do Paciente no Payload:**")
+                st.write(f"- Demografia: {list(patient_data.get('demographics', {}).keys())}")
+                st.write(f"- Comorbidades: {list(patient_data.get('comorbidities', {}).keys())}")
+                st.write(f"- Medicações: {list(patient_data.get('medications', {}).keys())}")
+                st.write(f"- Labs: {list(patient_data.get('labs', {}).keys())}")
+                st.write(f"- Cirúrgico: {list(patient_data.get('surgical', {}).keys())}")
+                
+                # Mostrar alguns valores específicos
+                demo = patient_data.get('demographics', {})
+                st.write(f"- Nome: {demo.get('nome', 'N/A')}")
+                st.write(f"- Idade: {demo.get('idade', 'N/A')}")
+                st.write(f"- ASA: {demo.get('asa', 'N/A')}")
+                
+                meds = patient_data.get('medications', {})
+                st.write(f"- Lista medicações: {meds.get('list_text', 'N/A')[:100]}...")
+                
                 # Tentar verificar se o Gemini está disponível
                 try:
                     from src.config import create_gemini_model
@@ -829,6 +847,41 @@ if st.session_state.get("disclaimer_ok", False):
                     st.write(f"- Modelo Gemini criado: {model is not None}")
                 except Exception as e:
                     st.write(f"- Erro ao criar modelo: {str(e)}")
+                
+                # Mostrar o prompt que será enviado
+                from src.ai_analysis import _build_prompt_general
+                prompt = _build_prompt_general(payload)
+                with st.expander("Ver prompt enviado para IA"):
+                    st.text(prompt[:2000] + "..." if len(prompt) > 2000 else prompt)
+                
+                # Teste direto da API
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🧪 Testar API diretamente"):
+                        try:
+                            from src.config import create_gemini_model
+                            model = create_gemini_model(config)
+                            if model:
+                                test_prompt = "Responda apenas: 'API funcionando'"
+                                response = model.generate_content(test_prompt)
+                                text = getattr(response, "text", None)
+                                if text:
+                                    st.success(f"✅ API funcionando! Resposta: {text}")
+                                else:
+                                    st.error("❌ API não retornou texto")
+                                    st.write(f"Response object: {response}")
+                            else:
+                                st.error("❌ Não foi possível criar o modelo")
+                        except Exception as e:
+                            st.error(f"❌ Erro no teste da API: {str(e)}")
+                            import traceback
+                            st.text(traceback.format_exc())
+                
+                with col2:
+                    if st.button("🗑️ Limpar cache da IA"):
+                        from src.ai_analysis import _cache
+                        _cache._cache.clear()
+                        st.success("Cache limpo! Tente gerar a análise novamente.")
 
             with st.spinner("🤖 Gerando análise com IA..."):
                 ai_struct, ai_raw = analyze_general(payload, config)
