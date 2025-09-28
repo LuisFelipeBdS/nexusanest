@@ -817,6 +817,54 @@ if st.session_state.get("disclaimer_ok", False):
             st.session_state["ai_struct"] = ai_struct
             st.session_state["ai_raw"] = ai_raw
 
+            # Recomendações de medicações estruturadas (IA)
+            meds_struct, meds_raw = analyze_medications(payload, config)
+            st.session_state["ai_meds"] = meds_struct
+
+            # Gera um resumo markdown para o PDF
+            resumo = ai_struct.get("resumo_executivo") or ""
+            ps = ai_struct.get("por_sistemas") or {}
+            recs = ai_struct.get("recomendacoes", []) or []
+            mon = ai_struct.get("monitorizacao", []) or []
+            md_lines = []
+            if resumo:
+                md_lines.append(f"## Resumo Executivo\n{resumo}")
+            md_lines.append("## Análise por Sistemas")
+            for sist in ["cardiovascular", "pulmonar", "renal", "delirium"]:
+                items = ps.get(sist, []) or []
+                if items:
+                    md_lines.append(f"### {sist.capitalize()}")
+                    for it in items:
+                        md_lines.append(f"- {it}")
+            if recs:
+                md_lines.append("## Recomendações")
+                for r in recs:
+                    md_lines.append(f"- {r}")
+            if mon:
+                md_lines.append("## Monitorização")
+                for m in mon:
+                    md_lines.append(f"- {m}")
+            # Medicações
+            if isinstance(meds_struct, dict):
+                susp = meds_struct.get("suspender", []) or []
+                manter = meds_struct.get("manter", []) or []
+                ajustar = meds_struct.get("ajustar", []) or []
+                if susp or manter or ajustar:
+                    md_lines.append("## Medicações (IA)")
+                    if susp:
+                        md_lines.append("### Suspender")
+                        for s in susp:
+                            md_lines.append(f"- {s}")
+                    if manter:
+                        md_lines.append("### Manter")
+                        for m in manter:
+                            md_lines.append(f"- {m}")
+                    if ajustar:
+                        md_lines.append("### Ajustar")
+                        for a in ajustar:
+                            md_lines.append(f"- {a}")
+            st.session_state["ai_summary"] = "\n".join(md_lines)
+
             # Exibe resumo estruturado
             st.markdown("### Análise por IA")
             resumo = ai_struct.get("resumo_executivo") or ""
