@@ -248,9 +248,11 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 	r = text.rfind("}")
 	if l != -1 and r != -1 and r > l:
 		frag = text[l : r + 1]
+		logger.info(f"Attempting to parse JSON fragment of {len(frag)} characters")
 		try:
 			data = json.loads(frag)
 			if isinstance(data, dict):
+				logger.info(f"Successfully parsed JSON fragment with keys: {list(data.keys())}")
 				norm = _normalize_top_keys(data)
 				if expected_keys:
 					for key in expected_keys:
@@ -263,9 +265,52 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 								norm[key] = []
 							else:
 								norm[key] = ""
+				logger.info(f"Returning parsed fragment with keys: {list(norm.keys())}")
 				return norm
-		except Exception:
-			pass
+		except Exception as e:
+			logger.warning(f"JSON fragment parse failed: {e}")
+			
+			# Terceira tentativa: tentar corrigir JSON truncado
+			logger.info("Attempting to fix truncated JSON")
+			try:
+				# Se o JSON está truncado, tentar fechar as estruturas abertas
+				if not frag.endswith("}"):
+					# Contar chaves abertas vs fechadas
+					open_braces = frag.count("{")
+					close_braces = frag.count("}")
+					missing_braces = open_braces - close_braces
+					
+					# Tentar fechar arrays e objetos abertos
+					fixed_frag = frag
+					if fixed_frag.rstrip().endswith('"'):
+						# Se termina com aspas, pode estar no meio de uma string
+						fixed_frag = fixed_frag.rstrip()[:-1]  # Remove aspas incompletas
+					
+					# Adicionar fechamentos necessários
+					for _ in range(missing_braces):
+						fixed_frag += "}"
+					
+					logger.info(f"Attempting to parse fixed JSON with {missing_braces} added braces")
+					data = json.loads(fixed_frag)
+					if isinstance(data, dict):
+						logger.info(f"Successfully parsed fixed JSON with keys: {list(data.keys())}")
+						norm = _normalize_top_keys(data)
+						if expected_keys:
+							for key in expected_keys:
+								if key not in norm:
+									if key == "por_sistemas":
+										norm[key] = {"cardiovascular": [], "pulmonar": [], "renal": [], "delirium": []}
+									elif key == "medicacoes":
+										norm[key] = {"suspender": [], "manter": [], "ajustar": []}
+									elif key in ("recomendacoes", "monitorizacao"):
+										norm[key] = []
+									else:
+										norm[key] = ""
+						logger.info(f"Returning fixed parsed JSON with keys: {list(norm.keys())}")
+						return norm
+			except Exception as e2:
+				logger.warning(f"Failed to fix truncated JSON: {e2}")
+				pass
 	# Terceira: literal_eval
 	try:
 		data = ast.literal_eval(text)

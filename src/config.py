@@ -20,7 +20,7 @@ except Exception:  # pragma: no cover - optional at runtime
 # -----------------------------
 DEFAULT_MODEL_NAME = "gemini-2.5-pro"
 MAX_INPUT_TOKENS = 32768
-MAX_OUTPUT_TOKENS = 2048
+MAX_OUTPUT_TOKENS = 4096
 TEMPERATURE = 0.3
 TOP_P = 0.95
 TOP_K = 40

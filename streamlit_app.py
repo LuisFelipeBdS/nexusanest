@@ -946,7 +946,15 @@ if st.session_state.get("disclaimer_ok", False):
                 **Ative o debug acima para mais informações.**
                 """)
             else:
-                st.success("✅ Análise por IA gerada com sucesso!")
+                # Verificar se a resposta foi truncada
+                if ai_raw and not ai_raw.strip().endswith("}"):
+                    st.warning("⚠️ **Resposta da IA foi truncada por limite de tokens**")
+                    st.info("A análise pode estar incompleta. Aumentamos o limite de tokens para próximas tentativas.")
+                elif ai_struct.get("resumo_executivo") and ai_struct.get("por_sistemas"):
+                    st.success("✅ Análise por IA gerada com sucesso!")
+                else:
+                    st.warning("⚠️ **Análise parcialmente gerada**")
+                    st.info("Alguns campos podem estar vazios. Tente limpar o cache e gerar novamente.")
 
             # Gera um resumo markdown para o PDF
             resumo = ai_struct.get("resumo_executivo") or ""
