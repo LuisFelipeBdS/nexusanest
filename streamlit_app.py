@@ -970,73 +970,107 @@ if st.session_state.get("disclaimer_ok", False):
 
             # Exibe resumo estruturado
             st.markdown("### Análise por IA")
+            
+            # Debug: mostrar as chaves disponíveis se debug estiver ativo
+            if st.session_state.get("debug_ai", False):
+                st.write(f"**Debug - Chaves na estrutura AI:** {list(ai_struct.keys())}")
+                st.write(f"**Debug - Resumo executivo raw:** {repr(ai_struct.get('resumo_executivo'))}")
+            
             resumo = ai_struct.get("resumo_executivo") or ""
-            if isinstance(resumo, str) and resumo:
+            if isinstance(resumo, str) and resumo.strip():
                 st.write(resumo)
             else:
                 st.info("Resumo executivo não disponível")
+                if st.session_state.get("debug_ai", False):
+                    st.write(f"Debug: resumo = {repr(resumo)}")
             
             ps = ai_struct.get("por_sistemas") or {}
+            if st.session_state.get("debug_ai", False):
+                st.write(f"**Debug - Por sistemas:** {ps}")
+            
             cols = st.columns(4)
             for i, sist in enumerate(["cardiovascular", "pulmonar", "renal", "delirium"]):
                 with cols[i % 4]:
                     st.markdown(f"**{sist.capitalize()}**")
                     items = ps.get(sist, []) or []
-                    if items:
+                    if isinstance(items, list) and items:
                         for item in items:
-                            st.write(f"- {item}")
+                            if item and str(item).strip():
+                                st.write(f"- {item}")
                     else:
                         st.write("_Sem análise disponível_")
+                        if st.session_state.get("debug_ai", False):
+                            st.write(f"Debug {sist}: {repr(items)}")
             
             st.markdown("**Estratificação Geral**")
             estratificacao = ai_struct.get("estratificacao_geral") or ""
-            if estratificacao:
+            if isinstance(estratificacao, str) and estratificacao.strip():
                 st.write(estratificacao)
             else:
                 st.info("Estratificação geral não disponível")
+                if st.session_state.get("debug_ai", False):
+                    st.write(f"Debug: estratificacao = {repr(estratificacao)}")
             
             st.markdown("**Recomendações**")
             recs = ai_struct.get("recomendacoes", []) or []
-            if recs:
+            if isinstance(recs, list) and recs:
                 for r in recs:
-                    st.write(f"- {r}")
+                    if r and str(r).strip():
+                        st.write(f"- {r}")
             else:
                 st.info("Recomendações não disponíveis")
+                if st.session_state.get("debug_ai", False):
+                    st.write(f"Debug: recomendacoes = {repr(recs)}")
             
             st.markdown("**Monitorização**")
             mon = ai_struct.get("monitorizacao", []) or []
-            if mon:
+            if isinstance(mon, list) and mon:
                 for m in mon:
-                    st.write(f"- {m}")
+                    if m and str(m).strip():
+                        st.write(f"- {m}")
             else:
                 st.info("Sugestões de monitorização não disponíveis")
+                if st.session_state.get("debug_ai", False):
+                    st.write(f"Debug: monitorizacao = {repr(mon)}")
 
             st.markdown("### Recomendações de Medicações (IA)")
             meds_struct = st.session_state.get("ai_meds", {})
             
+            if st.session_state.get("debug_ai", False):
+                st.write(f"**Debug - Medicações estrutura:** {meds_struct}")
+            
             st.markdown("**Suspender**")
             susp = meds_struct.get("suspender", []) or []
-            if susp:
+            if isinstance(susp, list) and susp:
                 for s in susp:
-                    st.write(f"- {s}")
+                    if s and str(s).strip():
+                        st.write(f"- {s}")
             else:
                 st.info("Nenhuma medicação para suspender identificada")
+                if st.session_state.get("debug_ai", False):
+                    st.write(f"Debug: suspender = {repr(susp)}")
             
             st.markdown("**Manter**")
             manter = meds_struct.get("manter", []) or []
-            if manter:
+            if isinstance(manter, list) and manter:
                 for m in manter:
-                    st.write(f"- {m}")
+                    if m and str(m).strip():
+                        st.write(f"- {m}")
             else:
                 st.info("Nenhuma medicação para manter identificada")
+                if st.session_state.get("debug_ai", False):
+                    st.write(f"Debug: manter = {repr(manter)}")
             
             st.markdown("**Ajustar**")
             ajustar = meds_struct.get("ajustar", []) or []
-            if ajustar:
+            if isinstance(ajustar, list) and ajustar:
                 for a in ajustar:
-                    st.write(f"- {a}")
+                    if a and str(a).strip():
+                        st.write(f"- {a}")
             else:
                 st.info("Nenhuma medicação para ajustar identificada")
+                if st.session_state.get("debug_ai", False):
+                    st.write(f"Debug: ajustar = {repr(ajustar)}")
 
             st.markdown("---")
             st.subheader("Exportar PDF")
