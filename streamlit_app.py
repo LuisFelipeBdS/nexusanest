@@ -202,7 +202,7 @@ Clique no botão abaixo para confirmar que leu e entendeu este aviso.
 """)
     if st.button("Entendi", type="primary"):
         st.session_state["disclaimer_ok"] = True
-        st.experimental_rerun()
+        st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
