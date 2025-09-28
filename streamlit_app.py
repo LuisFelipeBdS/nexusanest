@@ -19,6 +19,7 @@ from src.scores import (
     akics_score,
     pre_deliric_score,
 )
+from src.ai_analysis import analyze_general, analyze_medications
 
 
 # --------- Page Config ---------
@@ -765,31 +766,66 @@ if st.session_state.get("disclaimer_ok", False):
                 else:
                     st.info("STOP-Bang não calculado")
 
-            _show_interactive_visualizations()
-
             st.markdown("---")
-            st.subheader("Resumo por IA (opcional)")
-            custom_prompt = st.text_area(
-                "Contexto clínico",
-                "Paciente candidato a procedimento cirúrgico. Analise escores e descreva riscos e condutas.",
-            )
-            if st.button("Gerar resumo por IA"):
-                patient = st.session_state["patient"]
-                prompt = (
-                    f"Nome: {patient['demographics']['nome']}, Idade: {patient['demographics']['idade']}, Sexo: {patient['demographics']['sexo']}.\n"
-                    f"RCRI: {rcri.score if rcri else 'NA'} ({rcri.risk_category if rcri else 'NA'}).\n"
-                    f"ARISCAT: {ariscat['score'] if ariscat else 'NA'} ({ariscat['risk'] if ariscat else 'NA'}).\n"
-                    f"STOP-Bang: {stopbang.score if stopbang else 'NA'} ({stopbang.risk_category if stopbang else 'NA'}).\n\n"
-                    f"Contexto: {custom_prompt}"
+            st.subheader("Análise por IA")
+            # Monta payload a partir dos dados correntes
+            payload = {
+                "patient": st.session_state["patient"],
+                "scores": {}
+            }
+            # Preenche escores conhecidos
+            try:
+                # ASA
+                asa_obj = classify_asa(asa_class=str(st.session_state["patient"]["demographics"].get("asa", "II")), emergency_modifier=bool(st.session_state["patient"]["demographics"].get("asa_emergencia", False)))
+                payload["scores"]["asa"] = asa_obj.result
+            except Exception:
+                pass
+            try:
+                if rcri:
+                    payload["scores"]["rcri"] = {"score": rcri.score, "risk_category": rcri.risk_category, "details": getattr(rcri, "details", {})}
+            except Exception:
+                pass
+            try:
+                if ariscat:
+                    payload["scores"]["ariscat"] = {"score": ariscat["score"], "risk_category": ariscat["risk"], "details": ariscat.get("details", {})}
+            except Exception:
+                pass
+            # NSQIP proxy
+            try:
+                nsqip_out = nsqip_proxy(
+                    idade=int(st.session_state["patient"]["demographics"].get("idade", 60)),
+                    sexo=str(st.session_state["patient"]["demographics"].get("sexo", "Feminino")),
+                    status_funcional=str(st.session_state["patient"]["functional"].get("nsqip_status", "Independente")),
+                    emergencia=(str(st.session_state["patient"]["surgical"].get("urgencia", "Eletiva")) != "Eletiva"),
+                    asa=str(st.session_state["patient"]["demographics"].get("asa", "II")),
+                    diabetes=bool(st.session_state["patient"]["comorbidities"].get("diabetes_tipo_1") or st.session_state["patient"]["comorbidities"].get("diabetes_tipo_2")),
+                    hipertensao=bool(st.session_state["patient"]["comorbidities"].get("hipertensao")),
+                    dpoc=bool(st.session_state["patient"]["comorbidities"].get("dpoc")),
+                    insuficiencia_cardiaca=bool(st.session_state["patient"]["comorbidities"].get("insuficiencia_cardiaca")),
+                    procedimento=f"{st.session_state['patient']['surgical'].get('tipo_cirurgia','')} {st.session_state['patient']['surgical'].get('subtipo','')}",
+                    hematocrito=float(st.session_state["patient"]["labs"].get("hematocrito", 0.0)),
+                    creatinina=float(st.session_state["patient"]["labs"].get("creatinina", 0.0)),
+                    albumina=float(st.session_state["patient"]["labs"].get("albumina", 0.0)),
+                    plaquetas=float(st.session_state["patient"]["labs"].get("plaquetas", 0.0)),
                 )
-                tmp_cfg = config
-                ai_text = generate_recommendations(prompt, tmp_cfg)
-                if ai_text:
-                    st.session_state["ai_summary"] = ai_text
-                    st.success("Resumo gerado.")
-                    st.write(ai_text)
-                else:
-                    st.info("IA indisponível. Verifique a GOOGLE_API_KEY no .env.")
+                payload["scores"]["nsqip"] = nsqip_out.result
+            except Exception:
+                pass
+            # AKICS e PRE-DELIRIC podem ser incluídos se desejado; aqui mantemos payload enxuto
+
+            ai_struct, ai_raw = analyze_general(payload, config)
+            st.session_state["ai_struct"] = ai_struct
+            st.session_state["ai_raw"] = ai_raw
+
+            # Exibe resumo estruturado
+            st.write(ai_struct)
+
+            # Recomendações de medicações estruturadas
+            meds_struct, _ = analyze_medications(payload, config)
+            st.session_state["ai_meds"] = meds_struct
+            st.markdown("---")
+
+            _show_interactive_visualizations()
 
             st.markdown("---")
             st.subheader("Exportar PDF")
@@ -1040,63 +1076,6 @@ if st.session_state.get("disclaimer_ok", False):
             df_scores = df_scores[df_scores["Categoria"].astype(str).str.contains(filter_choice, case=False, na=False)]
         df_scores = df_scores.sort_values(by=["Risco %"], ascending=False, na_position="last")
         st.dataframe(df_scores, use_container_width=True)
-
-        # Heatmap de fatores
-        st.markdown("### Heatmap de Fatores de Risco")
-        def factor_matrix() -> "pd.DataFrame":
-            import pandas as pd
-            rows: Dict[str, Dict[str, float]] = {}
-            if rcri:
-                for k, v in (getattr(rcri, "details", {}) or {}).items():
-                    rows.setdefault(k, {})["RCRI"] = float(v)
-            if ariscat:
-                for k, v in (ariscat.get("details", {}) or {}).items():
-                    rows.setdefault(k, {})["ARISCAT"] = float(v)
-            if 'akics_out' in locals() and akics_out:
-                for k, v in (akics_out.result.get("detalhes", {}) or {}).items():
-                    rows.setdefault(k, {})["AKICS"] = float(v)
-            if 'pred_out' in locals() and pred_out:
-                for k, v in (pred_out.result.get("detalhes", {}) or {}).items():
-                    rows.setdefault(k, {})["PRE-DELIRIC"] = float(v)
-            if not rows:
-                return pd.DataFrame()
-            return pd.DataFrame(rows).T.fillna(0.0)
-        df_heat = factor_matrix()
-        if not df_heat.empty:
-            fig_heat = px.imshow(df_heat, color_continuous_scale="Blues", aspect="auto")
-            st.plotly_chart(fig_heat, use_container_width=True)
-        else:
-            st.info("Fatores insuficientes para heatmap.")
-
-        # Timeline de recomendações (IA)
-        st.markdown("### Timeline de Recomendações (Medicações)")
-        ai_meds = st.session_state.get("ai_meds") or {}
-        susp_list = ai_meds.get("suspender", []) if isinstance(ai_meds, dict) else []
-        import re
-        items = []
-        for s in susp_list:
-            m = re.search(r"(\d+)\s*(d|dia|dias|h|hora|horas)", str(s), flags=re.I)
-            days = 0
-            if m:
-                val = int(m.group(1))
-                unit = m.group(2).lower()
-                if unit.startswith("h"):
-                    days = max(0, val / 24)
-                else:
-                    days = val
-            items.append({"Medicação": s, "DiasAntes": days})
-        if items:
-            import pandas as pd
-            from datetime import datetime
-            df_tl = pd.DataFrame(items)
-            now = datetime.now()
-            df_tl["start"] = now - pd.to_timedelta((df_tl["DiasAntes"] * 24).astype(int), unit="h")
-            df_tl["finish"] = now
-            fig_tl = px.timeline(df_tl, x_start="start", x_end="finish", y="Medicação", color="DiasAntes", color_continuous_scale="Bluered")
-            fig_tl.update_layout(showlegend=False)
-            st.plotly_chart(fig_tl, use_container_width=True)
-        else:
-            st.info("Sem recomendações de suspensão de medicações para timeline.")
 
 
 # --------- Main Layout (Tabs/Sections) ---------
