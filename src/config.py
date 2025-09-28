@@ -118,11 +118,21 @@ def _build_generation_config(cfg: AppConfig) -> dict[str, Any]:
 
 def create_gemini_model(cfg: AppConfig):
 	"""Cria e retorna o modelo Gemini configurado. Retorna None se indisponível."""
-	if genai is None or not (cfg.google_api_key or os.getenv("GOOGLE_API_KEY")):
+	if genai is None:
 		logger.warning("Gemini SDK não disponível ou GOOGLE_API_KEY ausente.")
 		return None
+	# Resolve a API key em tempo de execução, priorizando st.secrets
+	api_key: Optional[str] = None
+	try:  # pragma: no cover - depende do runtime do Streamlit
+		import streamlit as st  # type: ignore
+		api_key = st.secrets.get("GOOGLE_API_KEY")  # type: ignore[attr-defined]
+	except Exception:
+		pass
+	api_key = api_key or cfg.google_api_key or os.getenv("GOOGLE_API_KEY")
+	if not api_key:
+		logger.warning("GOOGLE_API_KEY não encontrado em st.secrets, config ou ambiente.")
+		return None
 	try:
-		api_key = cfg.google_api_key or os.getenv("GOOGLE_API_KEY")
 		genai.configure(api_key=api_key)
 		model = genai.GenerativeModel(cfg.default_model)
 		return model
