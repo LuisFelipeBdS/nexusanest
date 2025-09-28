@@ -205,18 +205,27 @@ def _normalize_top_keys(data: Dict[str, Any]) -> Dict[str, Any]:
 
 def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, defaults: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 	text = (text or "").strip()
+	logger.info(f"Parsing response text with {len(text)} characters")
+	logger.debug(f"Raw text: {text[:500]}...")
+	
 	if expected_keys is None:
 		expected_keys = ["resumo_executivo", "por_sistemas", "estratificacao_geral", "recomendacoes", "medicacoes", "monitorizacao"]
+	
 	# Remove cercas ```
 	if text.startswith("```"):
 		lines = text.splitlines()
 		if len(lines) >= 3 and lines[0].startswith("```") and lines[-1].strip().startswith("```"):
 			text = "\n".join(lines[1:-1]).strip()
+			logger.info("Removed code fences from response")
+	
 	# Primeira tentativa: JSON direto (leniente)
 	try:
+		logger.info("Attempting direct JSON parse")
 		data = json.loads(text)
 		if isinstance(data, dict):
+			logger.info(f"Successfully parsed JSON with keys: {list(data.keys())}")
 			norm = _normalize_top_keys(data)
+			logger.info(f"After normalization, keys: {list(norm.keys())}")
 			# Garante chaves esperadas
 			if expected_keys:
 				for key in expected_keys:
@@ -229,8 +238,10 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 							norm[key] = []
 						else:
 							norm[key] = ""
+			logger.info(f"Final normalized structure keys: {list(norm.keys())}")
 			return norm
-	except Exception:
+	except Exception as e:
+		logger.warning(f"Direct JSON parse failed: {e}")
 		pass
 	# Segunda: extrair bloco entre chaves e tentar JSON
 	l = text.find("{")

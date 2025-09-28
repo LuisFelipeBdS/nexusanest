@@ -898,8 +898,32 @@ if st.session_state.get("disclaimer_ok", False):
                 st.write(f"- Resposta bruta vazia: {not bool(ai_raw)}")
                 st.write(f"- Tamanho da resposta: {len(ai_raw) if ai_raw else 0} caracteres")
                 if ai_raw:
-                    with st.expander("Ver resposta bruta"):
-                        st.text(ai_raw[:1000] + "..." if len(ai_raw) > 1000 else ai_raw)
+                    with st.expander("Ver resposta bruta completa"):
+                        st.text(ai_raw)
+                    
+                    # Tentar fazer parse manual para debug
+                    if st.button("🔍 Debug: Tentar parse manual"):
+                        try:
+                            import json
+                            # Tentar encontrar JSON na resposta
+                            start = ai_raw.find("{")
+                            end = ai_raw.rfind("}") + 1
+                            if start != -1 and end > start:
+                                json_part = ai_raw[start:end]
+                                st.write(f"**JSON extraído ({len(json_part)} chars):**")
+                                st.text(json_part)
+                                
+                                try:
+                                    parsed = json.loads(json_part)
+                                    st.success("✅ JSON válido!")
+                                    st.json(parsed)
+                                except Exception as e:
+                                    st.error(f"❌ JSON inválido: {e}")
+                            else:
+                                st.error("❌ Não foi possível encontrar JSON na resposta")
+                        except Exception as e:
+                            st.error(f"❌ Erro no parse manual: {e}")
+                
                 st.write(f"- Estrutura retornada: {list(ai_struct.keys())}")
                 st.write(f"- Resumo executivo: {ai_struct.get('resumo_executivo', 'N/A')[:100]}...")
             
