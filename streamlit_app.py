@@ -768,6 +768,7 @@ if st.session_state.get("disclaimer_ok", False):
 
             st.markdown("---")
             st.subheader("Análise por IA")
+            
             # Monta payload a partir dos dados correntes
             payload = {
                 "patient": st.session_state["patient"],
@@ -813,13 +814,62 @@ if st.session_state.get("disclaimer_ok", False):
                 pass
             # AKICS e PRE-DELIRIC podem ser incluídos se desejado; aqui mantemos payload enxuto
 
-            ai_struct, ai_raw = analyze_general(payload, config)
-            st.session_state["ai_struct"] = ai_struct
-            st.session_state["ai_raw"] = ai_raw
+            # Debug: Mostrar informações sobre a configuração
+            if st.checkbox("🔧 Mostrar informações de debug", key="debug_ai"):
+                st.write("**Debug - Configuração:**")
+                st.write(f"- API Key configurada: {bool(config.google_api_key)}")
+                st.write(f"- Modelo: {config.default_model}")
+                st.write(f"- Payload tem dados do paciente: {bool(payload.get('patient'))}")
+                st.write(f"- Payload tem escores: {list(payload.get('scores', {}).keys())}")
+                
+                # Tentar verificar se o Gemini está disponível
+                try:
+                    from src.config import create_gemini_model
+                    model = create_gemini_model(config)
+                    st.write(f"- Modelo Gemini criado: {model is not None}")
+                except Exception as e:
+                    st.write(f"- Erro ao criar modelo: {str(e)}")
 
-            # Recomendações de medicações estruturadas (IA)
-            meds_struct, meds_raw = analyze_medications(payload, config)
-            st.session_state["ai_meds"] = meds_struct
+            with st.spinner("🤖 Gerando análise com IA..."):
+                ai_struct, ai_raw = analyze_general(payload, config)
+                st.session_state["ai_struct"] = ai_struct
+                st.session_state["ai_raw"] = ai_raw
+
+                # Recomendações de medicações estruturadas (IA)
+                meds_struct, meds_raw = analyze_medications(payload, config)
+                st.session_state["ai_meds"] = meds_struct
+            
+            # Debug: Mostrar resposta bruta da IA
+            if st.session_state.get("debug_ai", False):
+                st.write("**Debug - Resposta da IA:**")
+                st.write(f"- Resposta bruta vazia: {not bool(ai_raw)}")
+                st.write(f"- Tamanho da resposta: {len(ai_raw) if ai_raw else 0} caracteres")
+                if ai_raw:
+                    with st.expander("Ver resposta bruta"):
+                        st.text(ai_raw[:1000] + "..." if len(ai_raw) > 1000 else ai_raw)
+                st.write(f"- Estrutura retornada: {list(ai_struct.keys())}")
+                st.write(f"- Resumo executivo: {ai_struct.get('resumo_executivo', 'N/A')[:100]}...")
+            
+            # Verificar se a IA retornou conteúdo válido
+            if not ai_raw or ai_struct.get("resumo_executivo") == "IA indisponível. Verifique a GOOGLE_API_KEY e conectividade.":
+                st.error("⚠️ **A IA não conseguiu gerar análise**")
+                st.markdown("""
+                **Possíveis causas:**
+                - API key do Gemini não configurada ou inválida
+                - Problemas de conectividade com a internet
+                - Limites de quota da API excedidos
+                - Erro temporário do serviço
+                
+                **Verifique:**
+                1. Se a `GOOGLE_API_KEY` está configurada no `st.secrets` ou `.env`
+                2. Se a chave é válida em: https://aistudio.google.com/app/apikey
+                3. Sua conexão com a internet
+                4. Os logs do terminal para mais detalhes
+                
+                **Ative o debug acima para mais informações.**
+                """)
+            else:
+                st.success("✅ Análise por IA gerada com sucesso!")
 
             # Gera um resumo markdown para o PDF
             resumo = ai_struct.get("resumo_executivo") or ""
@@ -870,32 +920,70 @@ if st.session_state.get("disclaimer_ok", False):
             resumo = ai_struct.get("resumo_executivo") or ""
             if isinstance(resumo, str) and resumo:
                 st.write(resumo)
+            else:
+                st.info("Resumo executivo não disponível")
+            
             ps = ai_struct.get("por_sistemas") or {}
             cols = st.columns(4)
             for i, sist in enumerate(["cardiovascular", "pulmonar", "renal", "delirium"]):
                 with cols[i % 4]:
                     st.markdown(f"**{sist.capitalize()}**")
-                    for item in ps.get(sist, []) or []:
-                        st.write(f"- {item}")
+                    items = ps.get(sist, []) or []
+                    if items:
+                        for item in items:
+                            st.write(f"- {item}")
+                    else:
+                        st.write("_Sem análise disponível_")
+            
             st.markdown("**Estratificação Geral**")
-            st.write(ai_struct.get("estratificacao_geral") or "")
+            estratificacao = ai_struct.get("estratificacao_geral") or ""
+            if estratificacao:
+                st.write(estratificacao)
+            else:
+                st.info("Estratificação geral não disponível")
+            
             st.markdown("**Recomendações**")
-            for r in ai_struct.get("recomendacoes", []) or []:
-                st.write(f"- {r}")
+            recs = ai_struct.get("recomendacoes", []) or []
+            if recs:
+                for r in recs:
+                    st.write(f"- {r}")
+            else:
+                st.info("Recomendações não disponíveis")
+            
             st.markdown("**Monitorização**")
-            for m in ai_struct.get("monitorizacao", []) or []:
-                st.write(f"- {m}")
+            mon = ai_struct.get("monitorizacao", []) or []
+            if mon:
+                for m in mon:
+                    st.write(f"- {m}")
+            else:
+                st.info("Sugestões de monitorização não disponíveis")
 
             st.markdown("### Recomendações de Medicações (IA)")
+            meds_struct = st.session_state.get("ai_meds", {})
+            
             st.markdown("**Suspender**")
-            for s in meds_struct.get("suspender", []) or []:
-                st.write(f"- {s}")
+            susp = meds_struct.get("suspender", []) or []
+            if susp:
+                for s in susp:
+                    st.write(f"- {s}")
+            else:
+                st.info("Nenhuma medicação para suspender identificada")
+            
             st.markdown("**Manter**")
-            for m in meds_struct.get("manter", []) or []:
-                st.write(f"- {m}")
+            manter = meds_struct.get("manter", []) or []
+            if manter:
+                for m in manter:
+                    st.write(f"- {m}")
+            else:
+                st.info("Nenhuma medicação para manter identificada")
+            
             st.markdown("**Ajustar**")
-            for a in meds_struct.get("ajustar", []) or []:
-                st.write(f"- {a}")
+            ajustar = meds_struct.get("ajustar", []) or []
+            if ajustar:
+                for a in ajustar:
+                    st.write(f"- {a}")
+            else:
+                st.info("Nenhuma medicação para ajustar identificada")
 
             st.markdown("---")
             st.subheader("Exportar PDF")

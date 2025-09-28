@@ -297,11 +297,14 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 def _run_gemini(prompt: str, cfg: AppConfig) -> Optional[str]:
 	model = create_gemini_model(cfg)
 	if model is None:
+		logger.warning("Modelo Gemini não disponível")
 		return None
 	attempts = max(1, cfg.retry_max_attempts)
 	last_text = None
-	for _ in range(attempts):
+	last_error = None
+	for attempt in range(attempts):
 		try:
+			logger.info(f"Tentativa {attempt + 1}/{attempts} de gerar conteúdo com IA")
 			resp = model.generate_content(
 				prompt,
 				generation_config=_build_generation_config(cfg),
@@ -327,13 +330,21 @@ def _run_gemini(prompt: str, cfg: AppConfig) -> Optional[str]:
 								if texts:
 									text = "\n".join(texts)
 									break
-						except Exception:
-							pass
+						except Exception as e:
+							logger.debug(f"Erro ao extrair texto de candidate: {e}")
 			if text:
+				logger.info(f"IA gerou resposta com {len(text)} caracteres")
 				return text
+			else:
+				logger.warning("IA não retornou texto válido")
 			last_text = text or last_text
-		except Exception:
+		except Exception as e:
+			last_error = str(e)
+			logger.warning(f"Erro na tentativa {attempt + 1}: {e}")
 			continue
+	
+	if last_error:
+		logger.error(f"Falha após {attempts} tentativas. Último erro: {last_error}")
 	return last_text
 
 
