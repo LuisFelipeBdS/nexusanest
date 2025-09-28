@@ -5,7 +5,7 @@ import json
 import ast
 from typing import Any, Dict, Optional, Tuple, List, Callable
 
-from .config import AppConfig, create_gemini_model, _build_generation_config
+from .config import AppConfig, create_gemini_model, _build_generation_config, logger
 
 
 def _hash_patient_payload(payload: Dict[str, Any], namespace: str = "default") -> str:
@@ -256,7 +256,7 @@ def analyze_general(payload: Dict[str, Any], cfg: AppConfig) -> Tuple[Dict[str, 
 	}
 	if not text:
 		fallback = {
-			"resumo_executivo": "IA indisponível",
+			"resumo_executivo": "IA indisponível. Verifique a GOOGLE_API_KEY e conectividade.",
 			"por_sistemas": {"cardiovascular": [], "pulmonar": [], "renal": [], "delirium": []},
 			"estratificacao_geral": "",
 			"recomendacoes": [],
@@ -264,6 +264,7 @@ def analyze_general(payload: Dict[str, Any], cfg: AppConfig) -> Tuple[Dict[str, 
 			"monitorizacao": [],
 		}
 		_cache.set(key, {**fallback, "_raw": ""})
+		logger.warning("AI response empty; returning fallback")
 		return fallback, ""
 	parsed = _parse_response_text(text, expected_keys=expected, defaults=defaults)
 	_cache.set(key, {**parsed, "_raw": text})

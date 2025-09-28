@@ -26,7 +26,7 @@ TOP_P = 0.95
 TOP_K = 40
 
 # Timeouts e Retry (segundos)
-DEFAULT_TIMEOUT_SECONDS = 30
+DEFAULT_TIMEOUT_SECONDS = 90
 RETRY_MAX_ATTEMPTS = 3
 RETRY_BACKOFF_INITIAL = 1.0
 RETRY_BACKOFF_MAX = 8.0
@@ -74,19 +74,35 @@ class AppConfig(BaseModel):
 
 
 def load_env_api_key(env_file: str | None = ".env") -> Optional[str]:
-	"""Carrega a GOOGLE_API_KEY do .env, se existir."""
+	"""Carrega a GOOGLE_API_KEY do .env ou de st.secrets, se existir."""
 	if env_file and Path(env_file).exists():
 		load_dotenv(env_file)
-	return os.getenv("GOOGLE_API_KEY")
+	api_key = os.getenv("GOOGLE_API_KEY")
+	# tenta st.secrets
+	try:  # pragma: no cover
+		import streamlit as st  # type: ignore
+		api_key = api_key or st.secrets.get("GOOGLE_API_KEY")  # type: ignore[attr-defined]
+	except Exception:
+		pass
+	return api_key
 
 
 def load_config(env_file: str | None = ".env") -> AppConfig:
 	if env_file and Path(env_file).exists():
 		load_dotenv(env_file)
+	api_key = os.getenv("GOOGLE_API_KEY")
+	model = os.getenv("DEFAULT_MODEL", DEFAULT_MODEL_NAME)
+	# tenta st.secrets
+	try:  # pragma: no cover
+		import streamlit as st  # type: ignore
+		api_key = api_key or st.secrets.get("GOOGLE_API_KEY")  # type: ignore[attr-defined]
+		model = st.secrets.get("DEFAULT_MODEL", model)  # type: ignore[attr-defined]
+	except Exception:
+		pass
 	return AppConfig(
 		app_name=os.getenv("APP_NAME", "HelpAnest - Plataforma de Risco Perioperatório"),
-		google_api_key=os.getenv("GOOGLE_API_KEY"),
-		default_model=os.getenv("DEFAULT_MODEL", DEFAULT_MODEL_NAME),
+		google_api_key=api_key,
+		default_model=model,
 		reports_dir=os.getenv("REPORTS_DIR", "reports"),
 	)
 
