@@ -216,7 +216,20 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 	try:
 		data = json.loads(text)
 		if isinstance(data, dict):
-			return _normalize_top_keys(data)
+			norm = _normalize_top_keys(data)
+			# Garante chaves esperadas
+			if expected_keys:
+				for key in expected_keys:
+					if key not in norm:
+						if key == "por_sistemas":
+							norm[key] = {"cardiovascular": [], "pulmonar": [], "renal": [], "delirium": []}
+						elif key == "medicacoes":
+							norm[key] = {"suspender": [], "manter": [], "ajustar": []}
+						elif key in ("recomendacoes", "monitorizacao"):
+							norm[key] = []
+						else:
+							norm[key] = ""
+			return norm
 	except Exception:
 		pass
 	# Segunda: extrair bloco entre chaves e tentar JSON
@@ -227,20 +240,56 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 		try:
 			data = json.loads(frag)
 			if isinstance(data, dict):
-				return _normalize_top_keys(data)
+				norm = _normalize_top_keys(data)
+				if expected_keys:
+					for key in expected_keys:
+						if key not in norm:
+							if key == "por_sistemas":
+								norm[key] = {"cardiovascular": [], "pulmonar": [], "renal": [], "delirium": []}
+							elif key == "medicacoes":
+								norm[key] = {"suspender": [], "manter": [], "ajustar": []}
+							elif key in ("recomendacoes", "monitorizacao"):
+								norm[key] = []
+							else:
+								norm[key] = ""
+				return norm
 		except Exception:
 			pass
 	# Terceira: literal_eval
 	try:
 		data = ast.literal_eval(text)
 		if isinstance(data, dict):
-			return _normalize_top_keys(data)
+			norm = _normalize_top_keys(data)
+			if expected_keys:
+				for key in expected_keys:
+					if key not in norm:
+						if key == "por_sistemas":
+							norm[key] = {"cardiovascular": [], "pulmonar": [], "renal": [], "delirium": []}
+						elif key == "medicacoes":
+							norm[key] = {"suspender": [], "manter": [], "ajustar": []}
+						elif key in ("recomendacoes", "monitorizacao"):
+							norm[key] = []
+						else:
+							norm[key] = ""
+			return norm
 	except Exception:
 		pass
-	# Fallback
+	# Fallback: garante estrutura completa, mesmo se defaults foram parciais
 	base = defaults.copy() if defaults else {}
+	# Preenche chaves esperadas ausentes
+	for key in expected_keys or []:
+		if key not in base:
+			if key == "por_sistemas":
+				base[key] = {"cardiovascular": [], "pulmonar": [], "renal": [], "delirium": []}
+			elif key == "medicacoes":
+				base[key] = {"suspender": [], "manter": [], "ajustar": []}
+			elif key in ("recomendacoes", "monitorizacao"):
+				base[key] = []
+			else:
+				base[key] = ""
+	# Se ainda estiver vazio (sem defaults), cria estrutura padrão
 	if not base:
-		base = {"resumo_executivo": "", "por_sistemas": {}, "estratificacao_geral": "", "recomendacoes": [], "medicacoes": {"suspender": [], "manter": [], "ajustar": []}, "monitorizacao": []}
+		base = {"resumo_executivo": "", "por_sistemas": {"cardiovascular": [], "pulmonar": [], "renal": [], "delirium": []}, "estratificacao_geral": "", "recomendacoes": [], "medicacoes": {"suspender": [], "manter": [], "ajustar": []}, "monitorizacao": []}
 	base.setdefault("_raw_text", text)
 	return base
 
@@ -258,10 +307,28 @@ def _run_gemini(prompt: str, cfg: AppConfig) -> Optional[str]:
 				generation_config=_build_generation_config(cfg),
 				request_options={"timeout": cfg.timeout_seconds},
 			)
+			# Extração robusta de texto: SDKs recentes podem não preencher resp.text
 			text = getattr(resp, "text", None)
 			if not text:
+				# Tenta extrair de candidates -> content.parts[].text
 				cands = getattr(resp, "candidates", None)
-				text = json.dumps(cands, ensure_ascii=False) if cands else None
+				if cands:
+					# Estruturas possíveis: objetos com atributos ou dicionários
+					for cand in cands:
+						try:
+							content = getattr(cand, "content", None) or (cand.get("content") if isinstance(cand, dict) else None)
+							parts = getattr(content, "parts", None) or (content.get("parts") if isinstance(content, dict) else None)
+							if parts:
+								texts = []
+								for part in parts:
+									pt = getattr(part, "text", None) or (part.get("text") if isinstance(part, dict) else None)
+									if pt:
+										texts.append(pt)
+								if texts:
+									text = "\n".join(texts)
+									break
+						except Exception:
+							pass
 			if text:
 				return text
 			last_text = text or last_text
