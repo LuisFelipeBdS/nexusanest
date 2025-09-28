@@ -35,41 +35,39 @@ def _build_prompt_general(payload: Dict[str, Any]) -> str:
 	akics = scores.get("akics")
 	predeliric = scores.get("pre_deliric")
 
-	prompt = f"""
-Você é um anestesiologista especialista em avaliação pré-operatória. NÃO escreva preâmbulos, saudações ou confirmações (ex.: "Com certeza...")
-Analise este paciente baseando-se nos escores validados calculados e forneça uma avaliação de risco perioperatório estruturada.
-
-INSTRUÇÕES CRÍTICAS: NÃO escreva preâmbulos, saudações ou confirmações (ex.: "Com certeza..."). Responda APENAS com um JSON válido exatamente no formato solicitado, iniciando pelo caractere { e terminando em }.
-
-DADOS DO PACIENTE: {_json(patient)}
-
-ESCORES CALCULADOS:
-ASA Physical Status: {_json(asa)}
-NSQIP Risk Calculator: {_json(nsqip)}
-RCRI (Revised Cardiac Risk Index): {_json(rcri)}
-ARISCAT: {_json(ariscat)}
-AKICS (se aplicável): {_json(akics)}
-PRE-DELIRIC: {_json(predeliric)}
-
-CIRURGIA: {_json(surgical)}
-
-Forneça resposta em JSON ESTRITO no formato abaixo, baseada EXCLUSIVAMENTE nos escores validados:
-{{
+	header = (
+		"Você é um anestesiologista especialista em avaliação pré-operatória.\n"
+		"Analise este paciente baseando-se nos escores validados calculados e forneça uma avaliação de risco perioperatório estruturada.\n\n"
+		"INSTRUÇÕES CRÍTICAS: NÃO escreva preâmbulos, saudações ou confirmações (ex.: 'Com certeza...'). "
+		"Responda APENAS com um JSON válido exatamente no formato solicitado, iniciando pelo caractere { e terminando em }.\n\n"
+		f"DADOS DO PACIENTE: {_json(patient)}\n\n"
+		"ESCORES CALCULADOS:\n"
+		f"ASA Physical Status: {_json(asa)}\n"
+		f"NSQIP Risk Calculator: {_json(nsqip)}\n"
+		f"RCRI (Revised Cardiac Risk Index): {_json(rcri)}\n"
+		f"ARISCAT: {_json(ariscat)}\n"
+		f"AKICS (se aplicável): {_json(akics)}\n"
+		f"PRE-DELIRIC: {_json(predeliric)}\n\n"
+		f"CIRURGIA: {_json(surgical)}\n\n"
+		"Forneça resposta em JSON ESTRITO no formato abaixo, baseada EXCLUSIVAMENTE nos escores validados:\n"
+	)
+	template = """
+{
   "resumo_executivo": "...",
-  "por_sistemas": {{
+  "por_sistemas": {
     "cardiovascular": ["..."],
     "pulmonar": ["..."],
     "renal": ["..."],
     "delirium": ["..."]
-  }},
+  },
   "estratificacao_geral": "...",
   "recomendacoes": ["..."],
-  "medicacoes": {{"suspender": ["..."], "manter": ["..."], "ajustar": ["..."]}},
+  "medicacoes": {"suspender": ["..."], "manter": ["..."], "ajustar": ["..."]},
   "monitorizacao": ["..."]
-}}
-NÃO escreva preâmbulos, saudações ou confirmações (ex.: "Com certeza...") Use linguagem técnica adequada para anestesiologistas e cite guidelines (ACC/AHA, ESC/ESA, ASA, ERAS, ACS-NSQIP) quando relevante.
+}
 """
-	return prompt
+	footer = "Use linguagem técnica adequada para anestesiologistas e cite guidelines (ACC/AHA, ESC/ESA, ASA, ERAS, ACS-NSQIP) quando relevante."
+	return header + template + footer
 
 
 def _build_prompt_medications(payload: Dict[str, Any]) -> str:
@@ -78,48 +76,48 @@ def _build_prompt_medications(payload: Dict[str, Any]) -> str:
 	surgical = patient.get("surgical", {})
 	meds = patient.get("medications", {})
 
-	prompt = f"""
-Baseado nos escores de risco calculados e dados clínicos, analise as medicações em uso seguindo guidelines baseadas em evidência. NÃO escreva preâmbulos, saudações ou confirmações (ex.: "Com certeza...")
-
-INSTRUÇÕES CRÍTICAS: NÃO escreva preâmbulos, saudações ou confirmações. Responda APENAS com um JSON válido exatamente no formato solicitado, iniciando em { e terminando em }.
-
-ESCORES DE RISCO:
-RCRI: {_json(scores.get('rcri'))}
-ARISCAT: {_json(scores.get('ariscat'))}
-AKICS: {_json(scores.get('akics'))}
-ASA: {_json(scores.get('asa'))}
-
-MEDICAÇÕES ATUAIS: {_json(meds)}
-TIPO DE CIRURGIA: {_json(surgical)}
-
-Responda em JSON ESTRITO:
-{{
+	header = (
+		"Baseado nos escores de risco calculados e dados clínicos, analise as medicações em uso seguindo guidelines baseadas em evidência.\n\n"
+		"INSTRUÇÕES CRÍTICAS: NÃO escreva preâmbulos, saudações ou confirmações. "
+		"Responda APENAS com um JSON válido exatamente no formato solicitado, iniciando em { e terminando em }.\n\n"
+		"ESCORES DE RISCO:\n"
+		f"RCRI: {_json(scores.get('rcri'))}\n"
+		f"ARISCAT: {_json(scores.get('ariscat'))}\n"
+		f"AKICS: {_json(scores.get('akics'))}\n"
+		f"ASA: {_json(scores.get('asa'))}\n\n"
+		f"MEDICAÇÕES ATUAIS: {_json(meds)}\n"
+		f"TIPO DE CIRURGIA: {_json(surgical)}\n\n"
+		"Responda em JSON ESTRITO:\n"
+	)
+	template = """
+{
   "suspender": ["medicação e antecedência (com justificativa)"],
   "manter": ["medicação (com justificativa)"],
   "ajustar": ["medicação e ajuste (baseado em função renal/cardíaca)"],
   "profilaxias": ["profilaxias específicas baseadas nos escores"],
   "bridge": ["cenários de terapia ponte e como conduzir"]
-}}
-Referencie guidelines (ACC/AHA, ESC/ESA, ASA) quando aplicável.
+}
 """
-	return prompt
+	footer = "Referencie guidelines (ACC/AHA, ESC/ESA, ASA) quando aplicável."
+	return header + template + footer
 
 
 def _build_prompt_scores_interpretation(payload: Dict[str, Any]) -> str:
 	scores = payload.get("scores", {})
-	prompt = f"""
-Interprete os resultados dos escores de forma integrada e clinicamente relevante. Responda em JSON ESTRITO.
-INSTRUÇÕES CRÍTICAS: Não escreva preâmbulos/saudações/"com certeza"; responda apenas com um JSON válido (inicie em { e termine em ).
-Resultados:
-ASA: {_json(scores.get('asa'))}
-NSQIP: {_json(scores.get('nsqip'))}
-RCRI: {_json(scores.get('rcri'))}
-ARISCAT: {_json(scores.get('ariscat'))}
-AKICS: {_json(scores.get('akics'))}
-PRE-DELIRIC: {_json(scores.get('pre_deliric'))}
-
-Formato:
-{{
+	header = (
+		"Interprete os resultados dos escores de forma integrada e clinicamente relevante. Responda em JSON ESTRITO.\n"
+		"INSTRUÇÕES CRÍTICAS: Não escreva preâmbulos/saudações/'com certeza'; responda apenas com um JSON válido (inicie em { e termine em }).\n"
+		"Resultados:\n"
+		f"ASA: {_json(scores.get('asa'))}\n"
+		f"NSQIP: {_json(scores.get('nsqip'))}\n"
+		f"RCRI: {_json(scores.get('rcri'))}\n"
+		f"ARISCAT: {_json(scores.get('ariscat'))}\n"
+		f"AKICS: {_json(scores.get('akics'))}\n"
+		f"PRE-DELIRIC: {_json(scores.get('pre_deliric'))}\n\n"
+		"Formato:\n"
+	)
+	template = """
+{
   "concordancia": ["onde os escores convergem"],
   "divergencia": ["onde divergem e por quê"],
   "relevancia": "qual escore é mais relevante",
@@ -127,10 +125,10 @@ Formato:
   "risco_global": "síntese do risco global",
   "pontos_atencao": ["itens críticos"],
   "otimizacao_preop": ["ações de otimização"]
-}}
-Mantenha linguagem técnica apropriada para anestesiologistas.
+}
 """
-	return prompt
+	footer = "Mantenha linguagem técnica apropriada para anestesiologistas."
+	return header + template + footer
 
 
 class AIAnalysisCache:
