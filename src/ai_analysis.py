@@ -146,25 +146,44 @@ _cache = AIAnalysisCache()
 
 
 def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, defaults: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-	text = text.strip()
+	text = (text or "").strip()
 	if expected_keys is None:
-		expected_keys = ["riscos", "recomendacoes", "medicacoes", "consideracoes"]
-	try:
-		data = json.loads(text)
-		if isinstance(data, dict):
-			for k in expected_keys:
-				if k not in data:
-					raise ValueError("missing key")
-			return data
-	except Exception:
-		pass
+		expected_keys = ["resumo_executivo", "por_sistemas", "estratificacao_geral", "recomendacoes", "medicacoes", "monitorizacao"]
+	# Remove cercas de código ``` ou ```json
+	if text.startswith("```"):
+		lines = text.splitlines()
+		# remove primeira e última linha se cercadas
+		if len(lines) >= 3 and lines[0].startswith("```") and lines[-1].strip().startswith("```"):
+			text = "\n".join(lines[1:-1]).strip()
+	# Tenta carregar diretamente
+	for attempt in range(2):
+		try:
+			data = json.loads(text)
+			if isinstance(data, dict):
+				# garante chaves esperadas
+				for k in expected_keys:
+					data.setdefault(k, [] if k not in ("por_sistemas", "medicacoes") else ({} if k == "por_sistemas" else {"suspender": [], "manter": [], "ajustar": []}))
+				return data
+		except Exception:
+			pass
+		# segunda tentativa: extrair substring do primeiro '{' ao último '}'
+		l = text.find("{")
+		r = text.rfind("}")
+		if l != -1 and r != -1 and r > l:
+			text = text[l : r + 1]
+			continue
+		break
 	# Fallback
 	base = defaults.copy() if defaults else {}
 	if not base:
 		base = {}
 	for k in expected_keys:
-		base.setdefault(k, [] if k != "medicacoes" else {"manter": [], "suspender": [], "ajustar": []})
-	# se não houver nada, coloque texto bruto em uma chave genérica
+		if k == "por_sistemas":
+			base.setdefault(k, {})
+		elif k == "medicacoes":
+			base.setdefault(k, {"manter": [], "suspender": [], "ajustar": []})
+		else:
+			base.setdefault(k, [])
 	base.setdefault("_raw_text", text)
 	return base
 

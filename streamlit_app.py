@@ -818,14 +818,36 @@ if st.session_state.get("disclaimer_ok", False):
             st.session_state["ai_raw"] = ai_raw
 
             # Exibe resumo estruturado
-            st.write(ai_struct)
+            st.markdown("### Análise por IA")
+            resumo = ai_struct.get("resumo_executivo") or ""
+            if isinstance(resumo, str) and resumo:
+                st.write(resumo)
+            ps = ai_struct.get("por_sistemas") or {}
+            cols = st.columns(4)
+            for i, sist in enumerate(["cardiovascular", "pulmonar", "renal", "delirium"]):
+                with cols[i % 4]:
+                    st.markdown(f"**{sist.capitalize()}**")
+                    for item in ps.get(sist, []) or []:
+                        st.write(f"- {item}")
+            st.markdown("**Estratificação Geral**")
+            st.write(ai_struct.get("estratificacao_geral") or "")
+            st.markdown("**Recomendações**")
+            for r in ai_struct.get("recomendacoes", []) or []:
+                st.write(f"- {r}")
+            st.markdown("**Monitorização**")
+            for m in ai_struct.get("monitorizacao", []) or []:
+                st.write(f"- {m}")
 
-            # Recomendações de medicações estruturadas
-            meds_struct, _ = analyze_medications(payload, config)
-            st.session_state["ai_meds"] = meds_struct
-            st.markdown("---")
-
-            _show_interactive_visualizations()
+            st.markdown("### Recomendações de Medicações (IA)")
+            st.markdown("**Suspender**")
+            for s in meds_struct.get("suspender", []) or []:
+                st.write(f"- {s}")
+            st.markdown("**Manter**")
+            for m in meds_struct.get("manter", []) or []:
+                st.write(f"- {m}")
+            st.markdown("**Ajustar**")
+            for a in meds_struct.get("ajustar", []) or []:
+                st.write(f"- {a}")
 
             st.markdown("---")
             st.subheader("Exportar PDF")
