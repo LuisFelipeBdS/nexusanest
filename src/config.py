@@ -50,7 +50,7 @@ logger = _get_logger()
 
 
 class AppConfig(BaseModel):
-	app_name: str = Field(default="HelpAnest - Plataforma de Risco Perioperatório")
+	app_name: str = Field(default="Nexus Anest - Plataforma de Risco Perioperatório")
 	google_api_key: Optional[str] = Field(default=None)
 	default_model: str = Field(default=DEFAULT_MODEL_NAME)
 	reports_dir: str = Field(default="reports")
@@ -100,7 +100,7 @@ def load_config(env_file: str | None = ".env") -> AppConfig:
 	except Exception:
 		pass
 	return AppConfig(
-		app_name=os.getenv("APP_NAME", "HelpAnest - Plataforma de Risco Perioperatório"),
+		app_name=os.getenv("APP_NAME", "Nexus Anest - Plataforma de Risco Perioperatório"),
 		google_api_key=api_key,
 		default_model=model,
 		reports_dir=os.getenv("REPORTS_DIR", "reports"),

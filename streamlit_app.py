@@ -24,7 +24,7 @@ from src.ai_analysis import analyze_general, analyze_medications
 
 # --------- Page Config ---------
 st.set_page_config(
-    page_title="HelpAnest - Estratificação de Risco Perioperatório",
+    page_title="Nexus Anest - Estratificação de Risco Perioperatório",
     page_icon="🩺",
     layout="wide",
 )
@@ -1223,7 +1223,7 @@ else:
 st.markdown(
     """
     <div class="footer">
-        Desenvolvido por HelpAnest • Feito com Streamlit • © 2025
+        Desenvolvido por Luis Felipe Barbosa • Feito com Streamlit • © 2025
     </div>
     """,
     unsafe_allow_html=True,
