@@ -205,8 +205,6 @@ def _normalize_top_keys(data: Dict[str, Any]) -> Dict[str, Any]:
 
 def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, defaults: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 	text = (text or "").strip()
-	logger.info(f"Parsing response text with {len(text)} characters")
-	logger.debug(f"Raw text: {text[:500]}...")
 	
 	if expected_keys is None:
 		expected_keys = ["resumo_executivo", "por_sistemas", "estratificacao_geral", "recomendacoes", "medicacoes", "monitorizacao"]
@@ -216,16 +214,12 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 		lines = text.splitlines()
 		if len(lines) >= 3 and lines[0].startswith("```") and lines[-1].strip().startswith("```"):
 			text = "\n".join(lines[1:-1]).strip()
-			logger.info("Removed code fences from response")
 	
 	# Primeira tentativa: JSON direto (leniente)
 	try:
-		logger.info("Attempting direct JSON parse")
 		data = json.loads(text)
 		if isinstance(data, dict):
-			logger.info(f"Successfully parsed JSON with keys: {list(data.keys())}")
 			norm = _normalize_top_keys(data)
-			logger.info(f"After normalization, keys: {list(norm.keys())}")
 			# Garante chaves esperadas
 			if expected_keys:
 				for key in expected_keys:
@@ -238,21 +232,19 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 							norm[key] = []
 						else:
 							norm[key] = ""
-			logger.info(f"Final normalized structure keys: {list(norm.keys())}")
+			logger.info("Análise parseada com sucesso")
 			return norm
 	except Exception as e:
-		logger.warning(f"Direct JSON parse failed: {e}")
+		logger.warning(f"Falha no parse direto do JSON: {e}")
 		pass
 	# Segunda: extrair bloco entre chaves e tentar JSON
 	l = text.find("{")
 	r = text.rfind("}")
 	if l != -1 and r != -1 and r > l:
 		frag = text[l : r + 1]
-		logger.info(f"Attempting to parse JSON fragment of {len(frag)} characters")
 		try:
 			data = json.loads(frag)
 			if isinstance(data, dict):
-				logger.info(f"Successfully parsed JSON fragment with keys: {list(data.keys())}")
 				norm = _normalize_top_keys(data)
 				if expected_keys:
 					for key in expected_keys:
@@ -265,15 +257,11 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 								norm[key] = []
 							else:
 								norm[key] = ""
-				logger.info(f"Returning parsed fragment with keys: {list(norm.keys())}")
+				logger.info("Análise parseada com sucesso (fragmento)")
 				return norm
-		except Exception as e:
-			logger.warning(f"JSON fragment parse failed: {e}")
-			
+		except Exception:
 			# Terceira tentativa: tentar corrigir JSON truncado
-			logger.info("Attempting to fix truncated JSON")
 			try:
-				# Se o JSON está truncado, tentar fechar as estruturas abertas
 				if not frag.endswith("}"):
 					# Contar chaves abertas vs fechadas
 					open_braces = frag.count("{")
@@ -283,17 +271,14 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 					# Tentar fechar arrays e objetos abertos
 					fixed_frag = frag
 					if fixed_frag.rstrip().endswith('"'):
-						# Se termina com aspas, pode estar no meio de uma string
-						fixed_frag = fixed_frag.rstrip()[:-1]  # Remove aspas incompletas
+						fixed_frag = fixed_frag.rstrip()[:-1]
 					
 					# Adicionar fechamentos necessários
 					for _ in range(missing_braces):
 						fixed_frag += "}"
 					
-					logger.info(f"Attempting to parse fixed JSON with {missing_braces} added braces")
 					data = json.loads(fixed_frag)
 					if isinstance(data, dict):
-						logger.info(f"Successfully parsed fixed JSON with keys: {list(data.keys())}")
 						norm = _normalize_top_keys(data)
 						if expected_keys:
 							for key in expected_keys:
@@ -306,10 +291,9 @@ def _parse_response_text(text: str, expected_keys: Optional[List[str]] = None, d
 										norm[key] = []
 									else:
 										norm[key] = ""
-						logger.info(f"Returning fixed parsed JSON with keys: {list(norm.keys())}")
+						logger.info("Análise parseada com sucesso (JSON corrigido)")
 						return norm
-			except Exception as e2:
-				logger.warning(f"Failed to fix truncated JSON: {e2}")
+			except Exception:
 				pass
 	# Terceira: literal_eval
 	try:
@@ -357,10 +341,8 @@ def _run_gemini(prompt: str, cfg: AppConfig) -> Optional[str]:
 		return None
 	attempts = max(1, cfg.retry_max_attempts)
 	last_text = None
-	last_error = None
 	for attempt in range(attempts):
 		try:
-			logger.info(f"Tentativa {attempt + 1}/{attempts} de gerar conteúdo com IA")
 			resp = model.generate_content(
 				prompt,
 				generation_config=_build_generation_config(cfg),
@@ -386,21 +368,17 @@ def _run_gemini(prompt: str, cfg: AppConfig) -> Optional[str]:
 								if texts:
 									text = "\n".join(texts)
 									break
-						except Exception as e:
-							logger.debug(f"Erro ao extrair texto de candidate: {e}")
+						except Exception:
+							pass
 			if text:
 				logger.info(f"IA gerou resposta com {len(text)} caracteres")
 				return text
-			else:
-				logger.warning("IA não retornou texto válido")
 			last_text = text or last_text
 		except Exception as e:
-			last_error = str(e)
 			logger.warning(f"Erro na tentativa {attempt + 1}: {e}")
 			continue
 	
-	if last_error:
-		logger.error(f"Falha após {attempts} tentativas. Último erro: {last_error}")
+	logger.error(f"Falha após {attempts} tentativas")
 	return last_text
 
 
@@ -408,13 +386,9 @@ def analyze_general(payload: Dict[str, Any], cfg: AppConfig) -> Tuple[Dict[str, 
 	key = _hash_patient_payload(payload, namespace="general")
 	cached = _cache.get(key)
 	if cached:
-		logger.info("Retornando resultado do cache")
 		return cached, cached.get("_raw", "")
 	
-	logger.info("Gerando nova análise com IA")
 	prompt = _build_prompt_general(payload)
-	logger.info(f"Prompt gerado com {len(prompt)} caracteres")
-	
 	text = _run_gemini(prompt, cfg)
 	expected = ["resumo_executivo", "por_sistemas", "estratificacao_geral", "recomendacoes", "medicacoes", "monitorizacao"]
 	defaults = {
@@ -431,12 +405,10 @@ def analyze_general(payload: Dict[str, Any], cfg: AppConfig) -> Tuple[Dict[str, 
 			"monitorizacao": [],
 		}
 		_cache.set(key, {**fallback, "_raw": ""})
-		logger.warning("AI response empty; returning fallback")
+		logger.warning("Resposta da IA vazia")
 		return fallback, ""
 	
-	logger.info(f"IA retornou resposta com {len(text)} caracteres")
 	parsed = _parse_response_text(text, expected_keys=expected, defaults=defaults)
-	logger.info(f"Resposta parseada com chaves: {list(parsed.keys())}")
 	_cache.set(key, {**parsed, "_raw": text})
 	return parsed, text
 

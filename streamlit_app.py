@@ -239,7 +239,7 @@ if st.session_state.get("disclaimer_ok", False):
         )
 
         st.markdown("---")
-        st.caption("Relatórios serão salvos em 'reports/'. A IA usa a chave do .env.")
+        st.caption("Relatórios são salvos automaticamente.")
 
     # --------- Helpers ---------
     def _show_patient_form() -> None:
@@ -814,74 +814,6 @@ if st.session_state.get("disclaimer_ok", False):
                 pass
             # AKICS e PRE-DELIRIC podem ser incluídos se desejado; aqui mantemos payload enxuto
 
-            # Debug: Mostrar informações sobre a configuração
-            if st.checkbox("🔧 Mostrar informações de debug", key="debug_ai"):
-                st.write("**Debug - Configuração:**")
-                st.write(f"- API Key configurada: {bool(config.google_api_key)}")
-                st.write(f"- Modelo: {config.default_model}")
-                st.write(f"- Payload tem dados do paciente: {bool(payload.get('patient'))}")
-                st.write(f"- Payload tem escores: {list(payload.get('scores', {}).keys())}")
-                
-                # Mostrar dados do paciente
-                patient_data = payload.get('patient', {})
-                st.write("**Dados do Paciente no Payload:**")
-                st.write(f"- Demografia: {list(patient_data.get('demographics', {}).keys())}")
-                st.write(f"- Comorbidades: {list(patient_data.get('comorbidities', {}).keys())}")
-                st.write(f"- Medicações: {list(patient_data.get('medications', {}).keys())}")
-                st.write(f"- Labs: {list(patient_data.get('labs', {}).keys())}")
-                st.write(f"- Cirúrgico: {list(patient_data.get('surgical', {}).keys())}")
-                
-                # Mostrar alguns valores específicos
-                demo = patient_data.get('demographics', {})
-                st.write(f"- Nome: {demo.get('nome', 'N/A')}")
-                st.write(f"- Idade: {demo.get('idade', 'N/A')}")
-                st.write(f"- ASA: {demo.get('asa', 'N/A')}")
-                
-                meds = patient_data.get('medications', {})
-                st.write(f"- Lista medicações: {meds.get('list_text', 'N/A')[:100]}...")
-                
-                # Tentar verificar se o Gemini está disponível
-                try:
-                    from src.config import create_gemini_model
-                    model = create_gemini_model(config)
-                    st.write(f"- Modelo Gemini criado: {model is not None}")
-                except Exception as e:
-                    st.write(f"- Erro ao criar modelo: {str(e)}")
-                
-                # Mostrar o prompt que será enviado
-                from src.ai_analysis import _build_prompt_general
-                prompt = _build_prompt_general(payload)
-                with st.expander("Ver prompt enviado para IA"):
-                    st.text(prompt[:2000] + "..." if len(prompt) > 2000 else prompt)
-                
-                # Teste direto da API
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("🧪 Testar API diretamente"):
-                        try:
-                            from src.config import create_gemini_model
-                            model = create_gemini_model(config)
-                            if model:
-                                test_prompt = "Responda apenas: 'API funcionando'"
-                                response = model.generate_content(test_prompt)
-                                text = getattr(response, "text", None)
-                                if text:
-                                    st.success(f"✅ API funcionando! Resposta: {text}")
-                                else:
-                                    st.error("❌ API não retornou texto")
-                                    st.write(f"Response object: {response}")
-                            else:
-                                st.error("❌ Não foi possível criar o modelo")
-                        except Exception as e:
-                            st.error(f"❌ Erro no teste da API: {str(e)}")
-                            import traceback
-                            st.text(traceback.format_exc())
-                
-                with col2:
-                    if st.button("🗑️ Limpar cache da IA"):
-                        from src.ai_analysis import _cache
-                        _cache._cache.clear()
-                        st.success("Cache limpo! Tente gerar a análise novamente.")
 
             with st.spinner("🤖 Gerando análise com IA..."):
                 ai_struct, ai_raw = analyze_general(payload, config)
@@ -892,69 +824,21 @@ if st.session_state.get("disclaimer_ok", False):
                 meds_struct, meds_raw = analyze_medications(payload, config)
                 st.session_state["ai_meds"] = meds_struct
             
-            # Debug: Mostrar resposta bruta da IA
-            if st.session_state.get("debug_ai", False):
-                st.write("**Debug - Resposta da IA:**")
-                st.write(f"- Resposta bruta vazia: {not bool(ai_raw)}")
-                st.write(f"- Tamanho da resposta: {len(ai_raw) if ai_raw else 0} caracteres")
-                if ai_raw:
-                    with st.expander("Ver resposta bruta completa"):
-                        st.text(ai_raw)
-                    
-                    # Tentar fazer parse manual para debug
-                    if st.button("🔍 Debug: Tentar parse manual"):
-                        try:
-                            import json
-                            # Tentar encontrar JSON na resposta
-                            start = ai_raw.find("{")
-                            end = ai_raw.rfind("}") + 1
-                            if start != -1 and end > start:
-                                json_part = ai_raw[start:end]
-                                st.write(f"**JSON extraído ({len(json_part)} chars):**")
-                                st.text(json_part)
-                                
-                                try:
-                                    parsed = json.loads(json_part)
-                                    st.success("✅ JSON válido!")
-                                    st.json(parsed)
-                                except Exception as e:
-                                    st.error(f"❌ JSON inválido: {e}")
-                            else:
-                                st.error("❌ Não foi possível encontrar JSON na resposta")
-                        except Exception as e:
-                            st.error(f"❌ Erro no parse manual: {e}")
-                
-                st.write(f"- Estrutura retornada: {list(ai_struct.keys())}")
-                st.write(f"- Resumo executivo: {ai_struct.get('resumo_executivo', 'N/A')[:100]}...")
             
             # Verificar se a IA retornou conteúdo válido
             if not ai_raw or ai_struct.get("resumo_executivo") == "IA indisponível. Verifique a GOOGLE_API_KEY e conectividade.":
-                st.error("⚠️ **A IA não conseguiu gerar análise**")
-                st.markdown("""
-                **Possíveis causas:**
-                - API key do Gemini não configurada ou inválida
-                - Problemas de conectividade com a internet
-                - Limites de quota da API excedidos
-                - Erro temporário do serviço
-                
-                **Verifique:**
-                1. Se a `GOOGLE_API_KEY` está configurada no `st.secrets` ou `.env`
-                2. Se a chave é válida em: https://aistudio.google.com/app/apikey
-                3. Sua conexão com a internet
-                4. Os logs do terminal para mais detalhes
-                
-                **Ative o debug acima para mais informações.**
-                """)
+                st.error("⚠️ **Erro na geração da análise por IA**")
+                st.info("Verifique a configuração da API do Gemini e tente novamente.")
             else:
                 # Verificar se a resposta foi truncada
                 if ai_raw and not ai_raw.strip().endswith("}"):
-                    st.warning("⚠️ **Resposta da IA foi truncada por limite de tokens**")
-                    st.info("A análise pode estar incompleta. Aumentamos o limite de tokens para próximas tentativas.")
+                    st.warning("⚠️ **Análise gerada parcialmente**")
+                    st.info("A resposta foi truncada. Tente gerar novamente.")
                 elif ai_struct.get("resumo_executivo") and ai_struct.get("por_sistemas"):
                     st.success("✅ Análise por IA gerada com sucesso!")
                 else:
-                    st.warning("⚠️ **Análise parcialmente gerada**")
-                    st.info("Alguns campos podem estar vazios. Tente limpar o cache e gerar novamente.")
+                    st.warning("⚠️ **Análise incompleta**")
+                    st.info("Alguns campos podem não ter sido processados. Tente novamente.")
 
             # Gera um resumo markdown para o PDF
             resumo = ai_struct.get("resumo_executivo") or ""
@@ -1003,23 +887,13 @@ if st.session_state.get("disclaimer_ok", False):
             # Exibe resumo estruturado
             st.markdown("### Análise por IA")
             
-            # Debug: mostrar as chaves disponíveis se debug estiver ativo
-            if st.session_state.get("debug_ai", False):
-                st.write(f"**Debug - Chaves na estrutura AI:** {list(ai_struct.keys())}")
-                st.write(f"**Debug - Resumo executivo raw:** {repr(ai_struct.get('resumo_executivo'))}")
-            
             resumo = ai_struct.get("resumo_executivo") or ""
             if isinstance(resumo, str) and resumo.strip():
                 st.write(resumo)
             else:
                 st.info("Resumo executivo não disponível")
-                if st.session_state.get("debug_ai", False):
-                    st.write(f"Debug: resumo = {repr(resumo)}")
             
             ps = ai_struct.get("por_sistemas") or {}
-            if st.session_state.get("debug_ai", False):
-                st.write(f"**Debug - Por sistemas:** {ps}")
-            
             cols = st.columns(4)
             for i, sist in enumerate(["cardiovascular", "pulmonar", "renal", "delirium"]):
                 with cols[i % 4]:
@@ -1031,8 +905,6 @@ if st.session_state.get("disclaimer_ok", False):
                                 st.write(f"- {item}")
                     else:
                         st.write("_Sem análise disponível_")
-                        if st.session_state.get("debug_ai", False):
-                            st.write(f"Debug {sist}: {repr(items)}")
             
             st.markdown("**Estratificação Geral**")
             estratificacao = ai_struct.get("estratificacao_geral") or ""
@@ -1040,8 +912,6 @@ if st.session_state.get("disclaimer_ok", False):
                 st.write(estratificacao)
             else:
                 st.info("Estratificação geral não disponível")
-                if st.session_state.get("debug_ai", False):
-                    st.write(f"Debug: estratificacao = {repr(estratificacao)}")
             
             st.markdown("**Recomendações**")
             recs = ai_struct.get("recomendacoes", []) or []
@@ -1051,8 +921,6 @@ if st.session_state.get("disclaimer_ok", False):
                         st.write(f"- {r}")
             else:
                 st.info("Recomendações não disponíveis")
-                if st.session_state.get("debug_ai", False):
-                    st.write(f"Debug: recomendacoes = {repr(recs)}")
             
             st.markdown("**Monitorização**")
             mon = ai_struct.get("monitorizacao", []) or []
@@ -1062,8 +930,6 @@ if st.session_state.get("disclaimer_ok", False):
                         st.write(f"- {m}")
             else:
                 st.info("Sugestões de monitorização não disponíveis")
-                if st.session_state.get("debug_ai", False):
-                    st.write(f"Debug: monitorizacao = {repr(mon)}")
 
             st.markdown("### Recomendações de Medicações (IA)")
             
@@ -1074,12 +940,6 @@ if st.session_state.get("disclaimer_ok", False):
             # Se a análise geral tem medicações e a específica não, usar a geral
             if meds_from_general and not any(meds_struct.get(k, []) for k in ["suspender", "manter", "ajustar"]):
                 meds_struct = meds_from_general
-                st.info("ℹ️ Usando recomendações de medicações da análise geral")
-            
-            if st.session_state.get("debug_ai", False):
-                st.write(f"**Debug - Medicações da análise geral:** {meds_from_general}")
-                st.write(f"**Debug - Medicações específicas:** {st.session_state.get('ai_meds', {})}")
-                st.write(f"**Debug - Medicações finais:** {meds_struct}")
             
             st.markdown("**Suspender**")
             susp = meds_struct.get("suspender", []) or []
@@ -1089,8 +949,6 @@ if st.session_state.get("disclaimer_ok", False):
                         st.write(f"- {s}")
             else:
                 st.info("Nenhuma medicação para suspender identificada")
-                if st.session_state.get("debug_ai", False):
-                    st.write(f"Debug: suspender = {repr(susp)}")
             
             st.markdown("**Manter**")
             manter = meds_struct.get("manter", []) or []
@@ -1100,8 +958,6 @@ if st.session_state.get("disclaimer_ok", False):
                         st.write(f"- {m}")
             else:
                 st.info("Nenhuma medicação para manter identificada")
-                if st.session_state.get("debug_ai", False):
-                    st.write(f"Debug: manter = {repr(manter)}")
             
             st.markdown("**Ajustar**")
             ajustar = meds_struct.get("ajustar", []) or []
@@ -1111,8 +967,6 @@ if st.session_state.get("disclaimer_ok", False):
                         st.write(f"- {a}")
             else:
                 st.info("Nenhuma medicação para ajustar identificada")
-                if st.session_state.get("debug_ai", False):
-                    st.write(f"Debug: ajustar = {repr(ajustar)}")
 
             st.markdown("---")
             st.subheader("Exportar PDF")
