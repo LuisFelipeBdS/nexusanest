@@ -1066,10 +1066,20 @@ if st.session_state.get("disclaimer_ok", False):
                     st.write(f"Debug: monitorizacao = {repr(mon)}")
 
             st.markdown("### Recomendações de Medicações (IA)")
+            
+            # Primeiro, tentar usar as medicações da análise geral se disponível
+            meds_from_general = ai_struct.get("medicacoes", {})
             meds_struct = st.session_state.get("ai_meds", {})
             
+            # Se a análise geral tem medicações e a específica não, usar a geral
+            if meds_from_general and not any(meds_struct.get(k, []) for k in ["suspender", "manter", "ajustar"]):
+                meds_struct = meds_from_general
+                st.info("ℹ️ Usando recomendações de medicações da análise geral")
+            
             if st.session_state.get("debug_ai", False):
-                st.write(f"**Debug - Medicações estrutura:** {meds_struct}")
+                st.write(f"**Debug - Medicações da análise geral:** {meds_from_general}")
+                st.write(f"**Debug - Medicações específicas:** {st.session_state.get('ai_meds', {})}")
+                st.write(f"**Debug - Medicações finais:** {meds_struct}")
             
             st.markdown("**Suspender**")
             susp = meds_struct.get("suspender", []) or []
