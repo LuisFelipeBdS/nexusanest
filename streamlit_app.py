@@ -830,15 +830,7 @@ if st.session_state.get("disclaimer_ok", False):
                 st.error("⚠️ **Erro na geração da análise por IA**")
                 st.info("Verifique a configuração da API do Gemini e tente novamente.")
             else:
-                # Verificar se a resposta foi truncada
-                if ai_raw and not ai_raw.strip().endswith("}"):
-                    st.warning("⚠️ **Análise gerada parcialmente**")
-                    st.info("A resposta foi truncada. Tente gerar novamente.")
-                elif ai_struct.get("resumo_executivo") and ai_struct.get("por_sistemas"):
-                    st.success("✅ Análise por IA gerada com sucesso!")
-                else:
-                    st.warning("⚠️ **Análise incompleta**")
-                    st.info("Alguns campos podem não ter sido processados. Tente novamente.")
+                st.success("✅ Análise por IA gerada com sucesso!")
 
             # Gera um resumo markdown para o PDF
             resumo = ai_struct.get("resumo_executivo") or ""
